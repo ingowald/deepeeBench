@@ -1,0 +1,6 @@
+[submodule "submodules/deepeeRT"]
+	path = submodules/deepeeRT
+	url = https://github.com/NVIDIA/deepeeRT
+[submodule "submodules/miniDP"]
+	path = submodules/miniDP
+	url = https://github.com/ingowald/miniScene
