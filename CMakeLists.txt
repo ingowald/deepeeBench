@@ -25,3 +25,13 @@ target_link_libraries(dpBench
   dprt::dprt
   miniSceneDP
   )
+
+add_executable(dpMakePrimaryRays
+  makePrimaryRays.cu
+)
+target_link_libraries(dpMakePrimaryRays
+  PUBLIC
+  dprt::dprt
+  miniSceneDP
+  )
+  
