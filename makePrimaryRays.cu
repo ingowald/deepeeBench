@@ -24,9 +24,9 @@ namespace miniapp {
   /*! this HAS to be the same data layout as DPRRay in deepee.h */
   struct Ray {
     vec3d origin;
-    double  tMax;
     vec3d direction;
     double  tMin;
+    double  tMax;
   };
 
   struct Camera {
@@ -281,7 +281,7 @@ namespace miniapp {
     double u = ix+.5;
     double v = iy+.5;
 
-    bool dbg = false;//ix == 512 && iy == 512;
+    bool dbg = ix == 512 && iy == 512;
     vec2d pixel = {u,v};
     Ray ray = camera.generateRay(pixel,dbg);
 
@@ -300,7 +300,7 @@ namespace miniapp {
   void main(int ac, char **av)
   {
     std::string inFileName;
-    std::string outImageName = "deepeeTest.ppm";
+    std::string outImageName = "makePrimaryRays.ppm";
     std::string outRaysName = "makePrimaryRays.dprays";
     vec2i fbSize = { 1024,1024 };
     uint64_t flags = 0;
