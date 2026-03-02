@@ -3,19 +3,17 @@
 
 cmake_minimum_required(VERSION 3.24)
 
-option(DEEPEE_OMP "Use OpenMP" OFF)
+option(DPRT_OMP "Use OpenMP" OFF)
 
 project(dpBench LANGUAGES C CXX)
 
-if (DEEPEE_OMP)
-  set(DEEPEERT_OMP ON)
-else()
+if (NOT DPRT_OMP)
   set(CMAKE_CUDA_ARCHITECTURES native)
   enable_language(CUDA)
 endif()
 
 add_subdirectory(submodules/miniDP)
-#find_package(deepeeRT REQUIRED)
+#find_package(dprt REQUIRED)
 add_subdirectory(submodules/deepeeRT)
 
 
@@ -24,6 +22,6 @@ add_executable(dpBench
 )
 target_link_libraries(dpBench
   PUBLIC
-  deepeeRT::deepeeRT
+  dprt::dprt
   miniSceneDP
   )

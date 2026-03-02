@@ -1,4 +1,4 @@
-#include "deepeeRT/deepeeRT.h"
+#include "dprt/dprt.h"
 #include "miniScene/Scene.h"
 #include <fstream>
 
@@ -23,14 +23,14 @@ T *alloc(size_t N)
   return d_t;
 }
 
-// __global__ void g_clearHits(DPRHit *hits, int N)
+// __global__ void g_clearHits(DPRTHit *hits, int N)
 // {
 //   int tid = threadIdx.x+blockIdx.x*blockDim.x;
 //   if (tid >= N) return;
 //   hits[tid].primID = -1;
 // }
 
-// void clearHits(DPRHit *d_hits, int N)
+// void clearHits(DPRTHit *d_hits, int N)
 // {
 //   int bs = 128;
 //   int nb = divRoundUp(N,bs);
@@ -38,73 +38,73 @@ T *alloc(size_t N)
 // }
 
 
-std::vector<std::vector<DPRRay>> loadRays(const std::string &fileName)
+std::vector<std::vector<DPRTRay>> loadRays(const std::string &fileName)
 {
   std::cout << "loading rays from " << fileName << std::endl;
   std::ifstream in(fileName.c_str(),std::ios::binary);
   if (!in.good())
     throw std::runtime_error("could not open rays file!?");
-  std::vector<std::vector<DPRRay>> ret;
+  std::vector<std::vector<DPRTRay>> ret;
   while (in.good() && !in.eof()) {
     size_t numRays = 0;
     in.read((char *)&numRays,sizeof(numRays));
     assert(numRays != 0);
     ret.push_back({});
     ret.back().resize(numRays);
-    in.read((char *)ret.back().data(),numRays*sizeof(DPRRay));
+    in.read((char *)ret.back().data(),numRays*sizeof(DPRTRay));
   }
   return ret;
 }
 
-DPRWorld specifyToDP(DPRContext ctx,
+DPRTModel toDPRT(DPRTContext ctx,
                        mini::Scene::SP miniModel)
 {
   assert(ctx);
 
-  std::map<mini::Object::SP,DPRGroup> dprGroupFor;
+  std::map<mini::Object::SP,DPRTGroup> dprtGroupFor;
 
-  std::vector<DPRGroup> instanceGroups;
+  std::vector<DPRTGroup> instanceGroups;
   std::vector<mini::common::affine3d> instanceTransforms;
   uint64_t uniqueMeshIDs = 0;
   for (auto inst : miniModel->instances) {
-    if (!dprGroupFor[inst->object]) {
-      std::vector<DPRTriangles> meshes;
+    if (!dprtGroupFor[inst->object]) {
+      std::vector<DPRTTriangles> meshes;
       for (auto miniMesh : inst->object->meshes) {
-        DPRTriangles dt
-          = dprCreateTrianglesDP(ctx,
+        DPRTTriangles dt
+          = dprtCreateTriangles(ctx,
                                  uniqueMeshIDs++,
-                                 (DPRvec3*)miniMesh->vertices.data(),
+                                 (DPRTvec3*)miniMesh->vertices.data(),
                                  miniMesh->vertices.size(),
-                                 (DPRint3*)miniMesh->indices.data(),
+                                 (DPRTint3*)miniMesh->indices.data(),
                                  miniMesh->indices.size());
         assert(dt);
         meshes.push_back(dt);
       }
-      DPRGroup group
-        = dprCreateTrianglesGroup(ctx,
+      DPRTGroup group
+        = dprtCreateTrianglesGroup(ctx,
                                   meshes.data(),
                                   meshes.size());
       assert(group);
-      dprGroupFor[inst->object] = group;
+      dprtGroupFor[inst->object] = group;
     }
-    instanceGroups.push_back(dprGroupFor[inst->object]);
+    instanceGroups.push_back(dprtGroupFor[inst->object]);
     instanceTransforms.push_back(inst->xfm);
   }
-  DPRWorld dprModel
-    = dprCreateWorldDP(ctx,
+  DPRTModel dprtModel
+    = dprtCreateModel(ctx,
                        instanceGroups.data(),
-                       (DPRAffine*)instanceTransforms.data(),
+                       (DPRTAffine*)instanceTransforms.data(),
                        instanceGroups.size());
-  return dprModel;
+  return dprtModel;
 }
 
-void trace(DPRWorld dpModel,
-           std::vector<DPRRay *> &devRayFronts,
-           std::vector<DPRHit *> &devHitFronts,
+void trace(DPRTModel dpModel,
+           std::vector<DPRTRay *> &devRayFronts,
+           std::vector<DPRTHit *> &devHitFronts,
            std::vector<int>      &devRayCounts)
 {
   for (int i=0;i<devRayFronts.size();i++)
-    dprTrace(dpModel,devRayFronts[i],devHitFronts[i],devRayCounts[i]);
+    dprtTrace(dpModel,devRayFronts[i],devHitFronts[i],devRayCounts[i]);
 }
 
 int main(int ac, char **av)
@@ -126,17 +126,17 @@ int main(int ac, char **av)
   }
 
   mini::Scene::SP miniModel = mini::Scene::load(inModelName);
-  DPRContext ctx = dprContextCreate(DPR_CONTEXT_GPU,0);
-  DPRWorld dpModel = specifyToDP(ctx,miniModel);
+  DPRTContext ctx = dprtContextCreate(DPRT_CONTEXT_GPU,0);
+  DPRTModel dpModel = toDPRT(ctx,miniModel);
 
-  std::vector<std::vector<DPRRay>> hostRayFronts = loadRays(inRaysName);
-  std::vector<DPRRay *> devRayFronts;
-  std::vector<DPRHit *> devHitFronts;
-  std::vector<int>      devRayCounts;
+  std::vector<std::vector<DPRTRay>> hostRayFronts = loadRays(inRaysName);
+  std::vector<DPRTRay *> devRayFronts;
+  std::vector<DPRTHit *> devHitFronts;
+  std::vector<int>       devRayCounts;
   size_t numRaysInTotal = 0;
   for (auto &wave : hostRayFronts) {
-    devRayFronts.push_back(upload<DPRRay>(wave));
-    devHitFronts.push_back(alloc<DPRHit>(wave.size()));
+    devRayFronts.push_back(upload<DPRTRay>(wave));
+    devHitFronts.push_back(alloc<DPRTHit>(wave.size()));
     numRaysInTotal += wave.size();
     devRayCounts.push_back(wave.size());
   }
