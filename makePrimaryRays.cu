@@ -300,7 +300,8 @@ namespace miniapp {
   void main(int ac, char **av)
   {
     std::string inFileName;
-    std::string outFileName = "deepeeTest.ppm";
+    std::string outImageName = "deepeeTest.ppm";
+    std::string outRaysName = "makePrimaryRays.dprays";
     vec2i fbSize = { 1024,1024 };
     uint64_t flags = 0;
     for (int i=1;i<ac;i++) {
@@ -311,7 +312,11 @@ namespace miniapp {
         flags |= DPRT_CULL_BACK;
       } else if (arg == "-fc" || arg == "--frontface-culling") {
         flags |= DPRT_CULL_FRONT;
-      } else if (arg == "-or" || arg == "--output-res") {
+      } else if (arg == "-orn" || arg == "--out-rays-name") {
+        outRaysName = av[++i];
+      } else if (arg == "-oin" || arg == "--out-image-name") {
+        outImageName = av[++i];
+      } else if (arg == "--output-res") {
         fbSize.x = std::stoi(av[++i]);
         fbSize.y = std::stoi(av[++i]);
       } else
@@ -340,12 +345,21 @@ namespace miniapp {
     DPRTModel model = toDPRT(dprt,scene);
 
     CUDA_SYNC_CHECK();
+    size_t nRays = fbSize.x*fbSize.y;
     DPRTRay *d_rays = 0;
-    cudaMalloc((void **)&d_rays,fbSize.x*fbSize.y*sizeof(DPRTRay));
+    cudaMalloc((void **)&d_rays,nRays*sizeof(DPRTRay));
     CUDA_SYNC_CHECK();
     g_generateRays<<<nb,bs>>>(d_rays,fbSize,camera);
     CUDA_SYNC_CHECK();
-      
+
+
+    std::vector<DPRTRay> h_rays(nRays);
+    cudaMemcpy(h_rays.data(),d_rays,nRays*sizeof(DPRTRay),cudaMemcpyDefault);
+    CUDA_SYNC_CHECK();
+    std::ofstream f_rays(outRaysName.c_str(),std::ios::binary);
+    f_rays.write((char*)&nRays,sizeof(nRays));
+    f_rays.write((char*)h_rays.data(),nRays*sizeof(DPRTRay));
+  
     DPRTHit *d_hits = 0;
     cudaMalloc((void **)&d_hits,fbSize.x*fbSize.y*sizeof(DPRTHit));
 
@@ -355,13 +369,13 @@ namespace miniapp {
 
     std::cout << "#dpm: shading rays" << std::endl;
     vec4f *m_pixels = 0;
-    cudaMallocManaged((void **)&m_pixels,fbSize.x*fbSize.y*sizeof(vec4f));
+    cudaMallocManaged((void **)&m_pixels,nRays*sizeof(vec4f));
     g_shadeRays<<<nb,bs>>>(m_pixels,d_rays,d_hits,fbSize);
     cudaStreamSynchronize(0);
 
 
-    std::cout << "#dpm: writing test image to " << outFileName << std::endl;
-    std::ofstream out(outFileName.c_str());
+    std::cout << "#dpm: writing test image to " << outImageName << std::endl;
+    std::ofstream out(outImageName.c_str());
 
     char buf[100];
     sprintf(buf,"P3\n#deepee test image\n%i %i 255\n",fbSize.x,fbSize.y);
