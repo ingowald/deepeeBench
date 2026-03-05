@@ -46,8 +46,11 @@ std::vector<std::vector<DPRTRay>> loadRays(const std::string &fileName)
     throw std::runtime_error("could not open rays file!?");
   std::vector<std::vector<DPRTRay>> ret;
   while (in.good() && !in.eof()) {
+    PING;
     size_t numRays = 0;
     in.read((char *)&numRays,sizeof(numRays));
+    if (!in.good()) break;
+    PRINT(numRays);
     assert(numRays != 0);
     ret.push_back({});
     ret.back().resize(numRays);
@@ -119,8 +122,10 @@ int main(int ac, char **av)
     const std::string arg = av[i];
     if (arg == "-oh")
       outHitsName = av[++i];
-    else if (arg == "-im")
+    else if (arg == "-imf")
       inModelName = av[++i];
+    else if (arg == "-irf")
+      inRaysName = av[++i];
     else
       throw std::runtime_error("unknown cmdline arg '"+arg+"'");
   }

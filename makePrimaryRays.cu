@@ -259,7 +259,9 @@ namespace miniapp {
 
     //Ray ray = (const Ray &)d_rays[ix+iy*fbSize.x];
     DPRTHit hit = d_hits[ix+iy*fbSize.x];
-    vec3f color = randomColor(hit.primID + 0x290374*hit.geomUserData);
+    vec3f color = randomColor(hit.primID >= 0
+                              ? hit.primID + 0x290374*hit.geomUserData
+                              : hit.primID);
     vec4f pixel = {color.x,color.y,color.z,1.f};
     int tid = ix+iy*fbSize.x;
     d_pixels[tid] = pixel;
@@ -312,9 +314,9 @@ namespace miniapp {
         flags |= DPRT_CULL_BACK;
       } else if (arg == "-fc" || arg == "--frontface-culling") {
         flags |= DPRT_CULL_FRONT;
-      } else if (arg == "-orn" || arg == "--out-rays-name") {
+      } else if (arg == "-orf" || arg == "--out-rays-file") {
         outRaysName = av[++i];
-      } else if (arg == "-oin" || arg == "--out-image-name") {
+      } else if (arg == "-oif" || arg == "--out-image-file") {
         outImageName = av[++i];
       } else if (arg == "--output-res") {
         fbSize.x = std::stoi(av[++i]);
@@ -358,6 +360,7 @@ namespace miniapp {
     CUDA_SYNC_CHECK();
     std::ofstream f_rays(outRaysName.c_str(),std::ios::binary);
     f_rays.write((char*)&nRays,sizeof(nRays));
+    PRINT(nRays);
     f_rays.write((char*)h_rays.data(),nRays*sizeof(DPRTRay));
   
     DPRTHit *d_hits = 0;
