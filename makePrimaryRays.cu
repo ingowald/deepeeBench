@@ -300,6 +300,20 @@ namespace miniapp {
              (float)ray.direction.z);
     ((Ray *)d_rays)[rayID] = ray;
   }
+
+  void usage(const std::string &error)
+  {
+    if (error != "") std::cout << "Error : " << error << "\n\n";
+    std::cout << "./dpMakePrimaryRays inFile.dpMini <flags>" << std::endl;
+    std::cout << "/w flags:" << std::endl;
+    std::cout << "  -orf outRayFile.dprays" << std::endl;
+    std::cout << "  --ortho orthoPlaneHeight" << std::endl;
+    std::cout << "  -bc # render test-frame w/ backface culling" << std::endl;
+    std::cout << "  -fc # render test-frame w/ frontface culling" << std::endl;
+    std::cout << "  -oif testFrame.ppm  # where to dump test-frame to" << std::endl;
+    std::cout << "  --output-res x y # res of test-frame image" << std::endl;
+    exit(0);
+  }
   
   void main(int ac, char **av)
   {
@@ -338,10 +352,10 @@ namespace miniapp {
       } else if (arg == "--ortho") {
         view.ortho = std::stof(av[++i]);
       } else
-        throw std::runtime_error("un-recognized cmdline arg '"+arg+"'");
+        usage("un-recognized cmdline arg '"+arg+"'");
     }
     if (inFileName.empty())
-      throw std::runtime_error("no input file name specified");
+      usage("no input file name specified");
 
     mini::Scene::SP scene = mini::Scene::load(inFileName);
 
@@ -351,7 +365,7 @@ namespace miniapp {
     Camera camera;
     if (view.fovy == 0.) {
       view.at = bounds.center();
-      view.from = view.at - length(bounds.size())*vec3d(2,1,4);
+      view.from = view.at - length(bounds.size())*vec3d(-2,-1,-4);
       view.fovy = 60.;
     }
     PRINT(view.from);
