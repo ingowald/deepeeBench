@@ -222,6 +222,8 @@ namespace miniapp {
       instanceGroups.push_back(dprtGroupFor[inst->object]);
       instanceTransforms.push_back(inst->xfm);
     }
+    // for (auto xfm : instanceTransforms)
+    //   PRINT(xfm);
     DPRTModel dprtModel
       = dprtCreateModel(ctx,
                         instanceGroups.data(),
