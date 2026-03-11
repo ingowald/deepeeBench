@@ -6,7 +6,17 @@
 #include "miniScene/Scene.h"
 #include <fstream>
 
-#define CUDA_SYNC_CHECK()                                 \
+
+#if FORCE_BUG
+# define dbg_x 965 // miss
+#else
+# define dbg_x 975 // hit
+#endif
+# define dbg_y 500
+
+
+
+#define CUDA_SYNC_CHECK()                                       \
   {                                                             \
     cudaDeviceSynchronize();                                    \
     cudaError_t rc = cudaGetLastError();                        \
@@ -17,10 +27,19 @@
     }                                                           \
   }
 
+extern int dprt_dbg_rayID;
 
 namespace miniapp {
   using namespace mini;
 
+  struct {
+    vec3d from = 0.;
+    vec3d at = 0.;
+    vec3d up { 0.,1.,0.};
+    double fovy = 0.;
+    double ortho = 0.;
+  } view;
+  
   /*! this HAS to be the same data layout as DPRRay in deepee.h */
   struct Ray {
     vec3d origin;
@@ -41,21 +60,40 @@ namespace miniapp {
     } origin, direction;
   };
 
-  Camera generateCamera(vec2i imageRes,
-                        const box3d &bounds,
-                        const vec3d &from_dir,
-                        const vec3d &up)
+  Camera generateOrtho(vec2i imageRes)
   {
     Camera camera;
-    vec3d target = bounds.center();
-    vec3d from = target + from_dir;
+    vec3d center = view.from;
+    vec3d dir = view.at - center;
+    vec3d du = normalize(cross(dir,view.up));
+    vec3d dv = normalize(cross(du,dir));
+    camera.origin.dv = dv*view.ortho/imageRes.y;
+    camera.origin.du = du*view.ortho/imageRes.y;
+    camera.origin.v  = view.from
+      - .5 *imageRes.x * camera.origin.du
+      - .5 *imageRes.y * camera.origin.dv;
+    camera.direction.v = dir;
+    camera.direction.du = vec3d(0.);
+    camera.direction.dv = vec3d(0.);
+    return camera;
+  }
+  
+  Camera generateCamera(vec2i imageRes,
+                        // const box3d &bounds,
+                        // const vec3d &from_dir,
+                        // const vec3d &up,
+                        double scale)
+  {
+    Camera camera;
+    vec3d target = view.at;//bounds.center();
+    vec3d from = view.from;//target + from_dir;
     vec3d direction = target-from;
     
-    vec3d du = normalize(cross(direction,up));
+    vec3d du = normalize(cross(direction,view.up));
     vec3d dv = normalize(cross(du,direction));
     
     double aspect = imageRes.x/double(imageRes.y);
-    double scale = length(bounds.size());
+    // double scale = length(bounds.size());
 
     dv *= scale;
     du *= scale*aspect;
@@ -72,8 +110,9 @@ namespace miniapp {
     camera.origin.dv = dv * (1./imageRes.y);
 #else
     // for testing: this is a perspective camera with all origins on a
-    // point, and different ray directions each
-    camera.direction.v = direction-.5*du-.5*dv;
+    // point, and different ray directions each. this corresponds to
+    // fovy=60
+    camera.direction.v = 2.*direction-.5*du-.5*dv;
     camera.direction.du = du * (1./imageRes.x);
     camera.direction.dv = dv * (1./imageRes.y);
 
@@ -192,59 +231,6 @@ namespace miniapp {
   }
 
   
-  // DPRTModel createModel(DPRTContext context,
-  //                       mini::Scene::SP scene)
-  // {
-    // std::map<dgef::Object *, DPRTGroup> objects;
-    // CUDA_SYNC_CHECK();
-
-    // for (auto inst : scene->instances)
-    //   objects[inst->object] = 0;
-
-    // std::cout << "#dpm: creating " << objects.size() << " objects" << std::endl;
-    // int meshID = 0;
-    // for (auto &pairs : objects) {
-    //   auto obj = pairs.first;
-    //   std::vector<DPRTTriangles> geoms;
-    //   for (auto pm : obj->meshes) {
-    //     std::cout << "#dpm: creating dprt triangle mesh w/ "
-    //               << prettyNumber(pm->indices.size()) << " triangles"
-    //               << std::endl;
-    //     DPRTTriangles geom
-    //       = dprtCreateTriangles(context,
-    //                              meshID++,
-    //                              (DPRTvec3*)pm->vertices.data(),
-    //                              pm->vertices.size(),
-    //                              (DPRTint3*)pm->indices.data(),
-    //                              pm->indices.size());
-    //     CUDA_SYNC_CHECK();
-    //     geoms.push_back(geom);
-    //   }
-    //   CUDA_SYNC_CHECK();
-      
-    //   DPRTGroup group = dprtCreateTrianglesGroup(context,
-    //                                            geoms.data(),
-    //                                            geoms.size());
-    //   objects[obj] = group;
-    // }
-    // CUDA_SYNC_CHECK();
-    
-    // std::cout << "#dpm: creating dprt model" << std::endl;
-    // std::vector<affine3d> xfms;
-    // std::vector<DPRTGroup> groups;
-    // for (auto inst : scene->instances) {
-    //   xfms.push_back(inst->xfm);
-    //   groups.push_back(objects[inst->object]);
-    // }
-    // DPRTModel model = dprtCreateModel(context,
-    //                                   groups.data(),
-    //                                   (DPRTAffine*)xfms.data(),
-    //                                   groups.size());
-    // CUDA_SYNC_CHECK();
-    // return model;
-  // }
-
-
   __global__
   void g_shadeRays(vec4f *d_pixels,
                    DPRTRay *d_rays,
@@ -257,11 +243,15 @@ namespace miniapp {
     if (ix >= fbSize.x) return;
     if (iy >= fbSize.y) return;
 
-    //Ray ray = (const Ray &)d_rays[ix+iy*fbSize.x];
     DPRTHit hit = d_hits[ix+iy*fbSize.x];
     vec3f color = randomColor(hit.primID >= 0
                               ? hit.primID + 0x290374*hit.geomUserData
                               : hit.primID);
+    if (ix == dbg_x || iy == dbg_y) color = vec3f(0.f);
+
+    if (ix == dbg_x && iy == dbg_y)
+      printf("shade: Hit dist %lf idx %i\n",
+             hit.t,hit.primID);
     vec4f pixel = {color.x,color.y,color.z,1.f};
     int tid = ix+iy*fbSize.x;
     d_pixels[tid] = pixel;
@@ -283,10 +273,22 @@ namespace miniapp {
     double u = ix+.5;
     double v = iy+.5;
 
-    bool dbg = ix == 512 && iy == 512;
+    bool dbg = false; //ix == 512 && iy == 512;
     vec2d pixel = {u,v};
     Ray ray = camera.generateRay(pixel,dbg);
 
+// #if FORCE_BUG
+//     int dbg_x = 980; // miss
+// #else
+//     int dbg_x = 990; // hit
+// #endif
+//     int dbg_y = 500;
+
+//     // if (ix == dbg_x || iy == dbg_y)
+//     //   ray.tMax = 0.;
+//     if (!(ix == dbg_x && iy == dbg_y))
+//       ray.tMax = 0.;
+    
     int rayID = ix+iy*fbSize.x;
     if (dbg)
       printf("ray %f %f %f : %f %f %f\n",
@@ -304,7 +306,7 @@ namespace miniapp {
     std::string inFileName;
     std::string outImageName = "makePrimaryRays.ppm";
     std::string outRaysName = "makePrimaryRays.dprays";
-    vec2i fbSize = { 1024,1024 };
+    vec2i fbSize = { 1600,1200 };//{ 1024,1024 };
     uint64_t flags = 0;
     for (int i=1;i<ac;i++) {
       std::string arg = av[i];
@@ -318,9 +320,23 @@ namespace miniapp {
         outRaysName = av[++i];
       } else if (arg == "-oif" || arg == "--out-image-file") {
         outImageName = av[++i];
+      } else if (arg == "--camera") {
+        view.from.x = std::stof(av[++i]);
+        view.from.y = std::stof(av[++i]);
+        view.from.z = std::stof(av[++i]);
+        view.at.x = std::stof(av[++i]);
+        view.at.y = std::stof(av[++i]);
+        view.at.z = std::stof(av[++i]);
+        view.up.x = std::stof(av[++i]);
+        view.up.y = std::stof(av[++i]);
+        view.up.z = std::stof(av[++i]);
+        ++i;
+        view.fovy = std::stof(av[++i]);
       } else if (arg == "--output-res") {
         fbSize.x = std::stoi(av[++i]);
         fbSize.y = std::stoi(av[++i]);
+      } else if (arg == "--ortho") {
+        view.ortho = std::stof(av[++i]);
       } else
         throw std::runtime_error("un-recognized cmdline arg '"+arg+"'");
     }
@@ -330,14 +346,22 @@ namespace miniapp {
     mini::Scene::SP scene = mini::Scene::load(inFileName);
 
     box3d bounds = scene->getBounds();
-    Camera camera = generateCamera(fbSize,
-                                   /* bounds to focus on */
-                                   bounds,
-                                   /* point we're looking from*/
-                                   length(bounds.size())*vec3d(2,1,4),
-                                   /* up for orientation */
-                                   vec3d(0,1,0));
-
+    PRINT(bounds);
+    double scale = length(bounds.size());
+    Camera camera;
+    if (view.fovy == 0.) {
+      view.at = bounds.center();
+      view.from = view.at - length(bounds.size())*vec3d(2,1,4);
+      view.fovy = 60.;
+    }
+    PRINT(view.from);
+    PRINT(view.at);
+     
+    if (view.ortho != 0.)
+      camera = generateOrtho(fbSize);
+    else
+      camera = generateCamera(fbSize,2.*length(bounds.size()));
+    
     vec2i bs(16,16);
     vec2i nb = divRoundUp(fbSize,bs);
     
@@ -351,6 +375,17 @@ namespace miniapp {
     DPRTRay *d_rays = 0;
     cudaMalloc((void **)&d_rays,nRays*sizeof(DPRTRay));
     CUDA_SYNC_CHECK();
+
+#if 1
+// #if FORCE_BUG
+//     int dbg_x = 980; // miss
+// #else
+//     int dbg_x = 990; // hit
+// #endif
+//     int dbg_y = 500;
+    dprt_dbg_rayID = dbg_x + dbg_y*fbSize.x;
+#endif
+      
     g_generateRays<<<nb,bs>>>(d_rays,fbSize,camera);
     CUDA_SYNC_CHECK();
 

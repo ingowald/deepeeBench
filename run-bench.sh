@@ -15,11 +15,21 @@ configs="cuBQL-double cuBQL-float owl-rtx owl-double-distance owl-double-triTest
 #cmake --con
 mkdir experiments
 for config in $configs; do
+    echo "======================================================="
+    echo config $config
+    echo "======================================================="
     flags=`cat config-${config}`
-    for f in $models; do
-	mkdir experiments/$config
-	cmake -S . -B experiments/$config ${flags}
-	cmake --build experiments/$config
+    echo flags $flags
+    echo "======================================================="
+    mkdir experiments/$config
+    cmake -S . -B experiments/$config ${flags}
+    cmake --build experiments/$config --parallel 32
+    for model in $models; do
+	experiments/$config/dpMakePrimaryRays\
+	    $benchData/$model.dpmini\
+	    `cat $benchData/$model.dpmini.view` \
+	    -orf experiments/$config/$model.dprays \
+	    -oif experiments/$config/$model.ppm 
     done
 done
 

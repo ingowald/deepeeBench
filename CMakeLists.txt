@@ -24,14 +24,17 @@ target_link_libraries(dpBench
   PUBLIC
   dprt::dprt
   miniSceneDP
-  )
+)
 
+option(DPB_FORCE_BUG "Force Bug" OFF)
 add_executable(dpMakePrimaryRays
   makePrimaryRays.cu
-)
-target_link_libraries(dpMakePrimaryRays
+  )
+  target_link_libraries(dpMakePrimaryRays
   PUBLIC
   dprt::dprt
   miniSceneDP
-  )
-  
+)
+if (DPB_FORCE_BUG)
+  target_compile_definitions(dpMakePrimaryRays PUBLIC -DFORCE_BUG=1)
+endif()    
