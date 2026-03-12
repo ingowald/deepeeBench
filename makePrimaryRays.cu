@@ -32,6 +32,8 @@ extern int dprt_dbg_rayID;
 namespace miniapp {
   using namespace mini;
 
+  double shift = 0.;
+  
   struct {
     vec3d from = 0.;
     vec3d at = 0.;
@@ -53,14 +55,14 @@ namespace miniapp {
       how the camera was created this could be either a orthogonal or
       a perspective camera (see Camera.cpp) */
     inline __device__
-    Ray generateRay(vec2d pixel, bool dbg=false) const;
+    Ray generateRay(vec2d pixel, double shift, bool dbg=false) const;
 
     struct {
       vec3d v,du,dv;
     } origin, direction;
   };
 
-  Camera generateOrtho(vec2i imageRes)
+  Camera generateOrtho(vec2i imageRes, double shift)
   {
     Camera camera;
     vec3d center = view.from;
@@ -70,6 +72,7 @@ namespace miniapp {
     camera.origin.dv = dv*view.ortho/imageRes.y;
     camera.origin.du = du*view.ortho/imageRes.y;
     camera.origin.v  = view.from
+      - shift * normalize(dir)
       - .5 *imageRes.x * camera.origin.du
       - .5 *imageRes.y * camera.origin.dv;
     camera.direction.v = dir;
@@ -82,7 +85,8 @@ namespace miniapp {
                         // const box3d &bounds,
                         // const vec3d &from_dir,
                         // const vec3d &up,
-                        double scale)
+                        double scale,
+                        double shift)
   {
     Camera camera;
     vec3d target = view.at;//bounds.center();
@@ -98,17 +102,6 @@ namespace miniapp {
     dv *= scale;
     du *= scale*aspect;
 
-#if 0
-    // for testing: this is a ortho camera with parallel rays and
-    // different origins all n a plane
-    camera.direction.v = normalize(direction);
-    camera.direction.du = 0.;
-    camera.direction.dv = 0.;
-
-    camera.origin.v = from-.5*du-.5*dv;
-    camera.origin.du = du * (1./imageRes.x);
-    camera.origin.dv = dv * (1./imageRes.y);
-#else
     // for testing: this is a perspective camera with all origins on a
     // point, and different ray directions each. this corresponds to
     // fovy=60
@@ -119,7 +112,8 @@ namespace miniapp {
     camera.origin.v = from;
     camera.origin.du = 0.;
     camera.origin.dv = 0.;
-#endif
+    camera.origin.v += shift * vec3d(1.,.1,.01);
+
     return camera;
   }
 
@@ -128,7 +122,7 @@ namespace miniapp {
       how the camera was created this could be either a orthogonal or
       a perspective camera (see Camera.cpp) */
   inline __device__
-  Ray Camera::generateRay(vec2d pixel, bool dbg) const
+  Ray Camera::generateRay(vec2d pixel, double shift, bool dbg) const
   {
     Ray ray;
     ray.origin
@@ -189,7 +183,8 @@ namespace miniapp {
   }
 
   DPRTModel toDPRT(DPRTContext ctx,
-                   mini::Scene::SP miniModel)
+                   mini::Scene::SP miniModel,
+                   double shift)
   {
     assert(ctx);
 
@@ -198,15 +193,25 @@ namespace miniapp {
     std::vector<DPRTGroup> instanceGroups;
     std::vector<mini::common::affine3d> instanceTransforms;
     uint64_t uniqueMeshIDs = 0;
+
+    bool hasInstances = false;
+    for (auto inst : miniModel->instances)
+      if (inst->xfm != affine3d())
+        hasInstances = true;
+    
     for (auto inst : miniModel->instances) {
       if (!dprtGroupFor[inst->object]) {
         std::vector<DPRTTriangles> meshes;
         for (auto miniMesh : inst->object->meshes) {
+          auto vertices = miniMesh->vertices;
+          if (!hasInstances)
+            for (auto &v : vertices)
+              v += shift * vec3d(1.,.1,.01);
           DPRTTriangles dt
             = dprtCreateTriangles(ctx,
                                   uniqueMeshIDs++,
-                                  (DPRTvec3*)miniMesh->vertices.data(),
-                                  miniMesh->vertices.size(),
+                                  (DPRTvec3*)vertices.data(),
+                                  vertices.size(),
                                   (DPRTint3*)miniMesh->indices.data(),
                                   miniMesh->indices.size());
           assert(dt);
@@ -220,7 +225,10 @@ namespace miniapp {
         dprtGroupFor[inst->object] = group;
       }
       instanceGroups.push_back(dprtGroupFor[inst->object]);
-      instanceTransforms.push_back(inst->xfm);
+      auto xfm = inst->xfm;
+      if (hasInstances)
+        xfm.p += shift * vec3d(1.,.1,.01);
+      instanceTransforms.push_back(xfm);
     }
     // for (auto xfm : instanceTransforms)
     //   PRINT(xfm);
@@ -309,6 +317,7 @@ namespace miniapp {
     std::cout << "./dpMakePrimaryRays inFile.dpMini <flags>" << std::endl;
     std::cout << "/w flags:" << std::endl;
     std::cout << "  -orf outRayFile.dprays" << std::endl;
+    std::cout << "  -ohf outHitFile.dphits" << std::endl;
     std::cout << "  --ortho orthoPlaneHeight" << std::endl;
     std::cout << "  -bc # render test-frame w/ backface culling" << std::endl;
     std::cout << "  -fc # render test-frame w/ frontface culling" << std::endl;
@@ -322,6 +331,7 @@ namespace miniapp {
     std::string inFileName;
     std::string outImageName = "makePrimaryRays.ppm";
     std::string outRaysName = "makePrimaryRays.dprays";
+    std::string outHitsName = "makePrimaryHits.dphits";
     vec2i fbSize = { 1600,1200 };//{ 1024,1024 };
     uint64_t flags = 0;
     for (int i=1;i<ac;i++) {
@@ -334,20 +344,24 @@ namespace miniapp {
         flags |= DPRT_CULL_FRONT;
       } else if (arg == "-orf" || arg == "--out-rays-file") {
         outRaysName = av[++i];
+      } else if (arg == "-ohf" || arg == "--out-hits-file") {
+        outHitsName = av[++i];
+      } else if (arg == "--shift") {
+        shift = std::stod(av[++i]);
       } else if (arg == "-oif" || arg == "--out-image-file") {
         outImageName = av[++i];
       } else if (arg == "--camera") {
         view.from.x = std::stof(av[++i]);
         view.from.y = std::stof(av[++i]);
         view.from.z = std::stof(av[++i]);
-        view.at.x = std::stof(av[++i]);
-        view.at.y = std::stof(av[++i]);
-        view.at.z = std::stof(av[++i]);
-        view.up.x = std::stof(av[++i]);
-        view.up.y = std::stof(av[++i]);
-        view.up.z = std::stof(av[++i]);
+        view.at.x   = std::stof(av[++i]);
+        view.at.y   = std::stof(av[++i]);
+        view.at.z   = std::stof(av[++i]);
+        view.up.x   = std::stof(av[++i]);
+        view.up.y   = std::stof(av[++i]);
+        view.up.z   = std::stof(av[++i]);
         ++i;
-        view.fovy = std::stof(av[++i]);
+        view.fovy   = std::stof(av[++i]);
       } else if (arg == "--output-res") {
         fbSize.x = std::stoi(av[++i]);
         fbSize.y = std::stoi(av[++i]);
@@ -374,9 +388,9 @@ namespace miniapp {
     PRINT(view.at);
      
     if (view.ortho != 0.)
-      camera = generateOrtho(fbSize);
+      camera = generateOrtho(fbSize,shift);
     else
-      camera = generateCamera(fbSize,2.*length(bounds.size()));
+      camera = generateCamera(fbSize,2.*length(bounds.size()),shift);
     
     vec2i bs(16,16);
     vec2i nb = divRoundUp(fbSize,bs);
@@ -384,7 +398,13 @@ namespace miniapp {
     std::cout << "#dpm: creating dprt context" << std::endl;
     DPRTContext dprt = dprtContextCreate(DPRT_CONTEXT_GPU,0);
     std::cout << "#dpm: creating model" << std::endl;
-    DPRTModel model = toDPRT(dprt,scene);
+    double modelShift = 0.f;
+    if (view.ortho != 0.)
+      modelShift = 0.;
+    else
+      modelShift = shift;
+        
+    DPRTModel model = toDPRT(dprt,scene,modelShift);
 
     CUDA_SYNC_CHECK();
     size_t nRays = fbSize.x*fbSize.y;
