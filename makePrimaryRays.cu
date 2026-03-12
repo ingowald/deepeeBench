@@ -447,6 +447,15 @@ namespace miniapp {
     g_shadeRays<<<nb,bs>>>(m_pixels,d_rays,d_hits,fbSize);
     cudaStreamSynchronize(0);
 
+    int nHits = nRays;
+    std::vector<DPRTHit> h_hits(nHits);
+    cudaMemcpy(h_hits.data(),d_hits,nHits*sizeof(DPRTHit),cudaMemcpyDefault);
+    CUDA_SYNC_CHECK();
+    std::ofstream f_hits(outHitsName.c_str(),std::ios::binary);
+    f_hits.write((char*)&nHits,sizeof(nHits));
+    PRINT(nHits);
+    f_hits.write((char*)h_hits.data(),nHits*sizeof(DPRTHit));
+    
 
     std::cout << "#dpm: writing test image to " << outImageName << std::endl;
     std::ofstream out(outImageName.c_str());
