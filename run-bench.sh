@@ -5,8 +5,8 @@ models="bmw ls pp rungholt truck donotshare-e89-open donotshare-e89-closed donot
 #models="truck"
 
 configs="cuBQL-double cuBQL-float owl-rtx owl-double-distance owl-double-triTest"
-shifts="0 100 10000 "
-#shifts="0 100 10000 1000000 100000000"
+#shifts="0 100 10000 "
+shifts="0 100 10000 1000000 100000000"
 #mkdir experiments/build_cuBQL_double
 #cmake -S . -B experiments/build_cuBQL_double
 #cmake --build experiments/build_cuBQL_double
@@ -25,7 +25,7 @@ for config in $configs; do
     echo flags $flags
     echo "======================================================="
     mkdir experiments/$config
-    cmake -S . -B experiments/$config ${flags}
+    CMAKE_PREFIX_PATH=/home/wald/opt/ cmake -S . -B experiments/$config ${flags}
     cmake --build experiments/$config --parallel 32
     for model in $models; do
 	for ms in $shifts; do

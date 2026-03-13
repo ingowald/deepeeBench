@@ -12,7 +12,7 @@
 #else
 # define dbg_x 975 // hit
 #endif
-# define dbg_y 500
+# define dbg_y 200
 
 
 
@@ -85,13 +85,14 @@ namespace miniapp {
                         // const box3d &bounds,
                         // const vec3d &from_dir,
                         // const vec3d &up,
-                        double scale,
                         double shift)
   {
     Camera camera;
     vec3d target = view.at;//bounds.center();
     vec3d from = view.from;//target + from_dir;
-    vec3d direction = target-from;
+    vec3d direction = normalize(target-from);
+    PRINT(target);
+    PRINT(from);
     
     vec3d du = normalize(cross(direction,view.up));
     vec3d dv = normalize(cross(du,direction));
@@ -99,13 +100,18 @@ namespace miniapp {
     double aspect = imageRes.x/double(imageRes.y);
     // double scale = length(bounds.size());
 
-    dv *= scale;
-    du *= scale*aspect;
+    // direction *= scale;
+    // dv *= scale;
+    // du *= scale*aspect;
+    du *= aspect;
 
     // for testing: this is a perspective camera with all origins on a
     // point, and different ray directions each. this corresponds to
     // fovy=60
-    camera.direction.v = 2.*direction-.5*du-.5*dv;
+    PRINT(direction);
+    PRINT(du);
+    PRINT(dv);
+    camera.direction.v = .5 * direction-.5*du-.5*dv;
     camera.direction.du = du * (1./imageRes.x);
     camera.direction.dv = dv * (1./imageRes.y);
 
@@ -114,6 +120,8 @@ namespace miniapp {
     camera.origin.dv = 0.;
     camera.origin.v += shift * vec3d(1.,.1,.01);
 
+    PRINT(camera.origin.v);
+    
     return camera;
   }
 
@@ -195,9 +203,12 @@ namespace miniapp {
     uint64_t uniqueMeshIDs = 0;
 
     bool hasInstances = false;
-    for (auto inst : miniModel->instances)
-      if (inst->xfm != affine3d())
+    for (auto inst : miniModel->instances) {
+      if (inst->xfm != affine3d()) {
+        // PRINT(inst->xfm);
         hasInstances = true;
+      }
+    }
     
     for (auto inst : miniModel->instances) {
       if (!dprtGroupFor[inst->object]) {
@@ -300,6 +311,9 @@ namespace miniapp {
 //       ray.tMax = 0.;
     
     int rayID = ix+iy*fbSize.x;
+    int dbg_rayID = dbg_x + dbg_y*fbSize.x;
+    dbg = dbg_rayID == rayID;
+
     if (dbg)
       printf("ray %f %f %f : %f %f %f\n",
              (float)ray.origin.x,
@@ -388,9 +402,9 @@ namespace miniapp {
     PRINT(view.at);
      
     if (view.ortho != 0.)
-      camera = generateOrtho(fbSize,shift);
+      camera = generateOrtho(fbSize,length(bounds.size())+shift);
     else
-      camera = generateCamera(fbSize,2.*length(bounds.size()),shift);
+      camera = generateCamera(fbSize,shift);
     
     vec2i bs(16,16);
     vec2i nb = divRoundUp(fbSize,bs);
@@ -413,12 +427,6 @@ namespace miniapp {
     CUDA_SYNC_CHECK();
 
 #if 1
-// #if FORCE_BUG
-//     int dbg_x = 980; // miss
-// #else
-//     int dbg_x = 990; // hit
-// #endif
-//     int dbg_y = 500;
     dprt_dbg_rayID = dbg_x + dbg_y*fbSize.x;
 #endif
       
