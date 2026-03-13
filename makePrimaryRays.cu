@@ -117,7 +117,7 @@ namespace miniapp {
 
     camera.origin.v = from;
     camera.origin.du = 0.;
-    camera.origin.dv = 0.;
+    camera.origin.dv = 0.;v
     camera.origin.v += shift * vec3d(1.,.1,.01);
 
     PRINT(camera.origin.v);
@@ -362,6 +362,8 @@ namespace miniapp {
         outHitsName = av[++i];
       } else if (arg == "--shift") {
         shift = std::stod(av[++i]);
+        if (shift != 0.)
+          shift = pow(10.,shift);
       } else if (arg == "-oif" || arg == "--out-image-file") {
         outImageName = av[++i];
       } else if (arg == "--camera") {
@@ -400,7 +402,8 @@ namespace miniapp {
     }
     PRINT(view.from);
     PRINT(view.at);
-     
+    PRINT(shift);
+    
     if (view.ortho != 0.)
       camera = generateOrtho(fbSize,length(bounds.size())+shift);
     else

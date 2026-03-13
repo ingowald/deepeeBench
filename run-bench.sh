@@ -4,9 +4,9 @@ benchData=/home/wald/deepeeData
 models="bmw ls pp rungholt truck donotshare-e89-open donotshare-e89-closed donotshare-headlight donotshare-tokamak"
 #models="truck"
 
-configs="cuBQL-double cuBQL-float owl-rtx owl-double-distance owl-double-triTest"
+configs="cuBQL-float cuBQL-double owl-rtx owl-double-distance owl-double-triTest"
 #shifts="0 100 10000 "
-shifts="0 100 10000 1000000 100000000"
+shifts="00 02 04 06 08 10 12"
 #mkdir experiments/build_cuBQL_double
 #cmake -S . -B experiments/build_cuBQL_double
 #cmake --build experiments/build_cuBQL_double
@@ -29,23 +29,27 @@ for config in $configs; do
     cmake --build experiments/$config --parallel 32
     for model in $models; do
 	for ms in $shifts; do
-	    experiments/$config/dpMakePrimaryRays\
+	    cmd="experiments/$config/dpMakePrimaryRays\
 		$benchData/$model.dpmini\
 		`cat $benchData/$model.dpmini.view` \
 		--shift $ms \
 		-orf experiments/$config/$model-persp$ms.dprays \
 		-ohf experiments/$config/$model-persp$ms.dphits \
-		-oif experiments/$config/$model-persp$ms.ppm 
+		-oif experiments/$config/$model-persp$ms.ppm"
+	    echo cmd is: $cmd
+	    $cmd
 	done
 	for os in $shifts; do
-	    experiments/$config/dpMakePrimaryRays\
+	    cmd="experiments/$config/dpMakePrimaryRays\
 		$benchData/$model.dpmini\
 		`cat $benchData/$model.dpmini.view` \
 		--ortho `cat $benchData/$model.dpmini.ortho` \
 		--shift $os \
 		-orf experiments/$config/$model-ortho$os.dprays \
 		-ohf experiments/$config/$model-ortho$os.dphits \
-		-oif experiments/$config/$model-ortho$os.ppm 
+		-oif experiments/$config/$model-ortho$os.ppm"
+	    echo cmd is: $cmd
+	    $cmd
 	done
     done
 done
