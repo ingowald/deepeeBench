@@ -117,7 +117,7 @@ namespace miniapp {
 
     camera.origin.v = from;
     camera.origin.du = 0.;
-    camera.origin.dv = 0.;v
+    camera.origin.dv = 0.;
     camera.origin.v += shift * vec3d(1.,.1,.01);
 
     PRINT(camera.origin.v);
