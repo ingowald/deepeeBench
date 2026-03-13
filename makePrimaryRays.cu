@@ -72,7 +72,7 @@ namespace miniapp {
     camera.origin.dv = dv*view.ortho/imageRes.y;
     camera.origin.du = du*view.ortho/imageRes.y;
     camera.origin.v  = view.from
-      - shift * normalize(dir)
+      - (shift * view.ortho) * normalize(dir)
       - .5 *imageRes.x * camera.origin.du
       - .5 *imageRes.y * camera.origin.dv;
     camera.direction.v = dir;
@@ -125,6 +125,37 @@ namespace miniapp {
     return camera;
   }
 
+  void shadePretty(vec4f *m_pixels,
+                   vec2i fbSize,
+                   DPRTRay *h_rays,
+                   DPRTHit *h_hits,
+                   mini::Scene::SP scene,
+                   std::vector<mini::Mesh::SP> &linearMeshes)
+  {
+    for (int i=0;i<fbSize.x*fbSize.y;i++) {
+      DPRTHit hit = h_hits[i];
+      vec3f pixel;
+      if (hit.primID < 0) {
+        pixel = vec3f(.8,.8,.9);
+      } else {
+        auto inst = scene->instances[hit.instID];
+        auto mesh = linearMeshes[(int)hit.geomUserData];
+        auto tri = mesh->indices[hit.primID];
+        auto v0 = mesh->vertices[tri.x];
+        auto v1 = mesh->vertices[tri.y];
+        auto v2 = mesh->vertices[tri.z];
+        vec3d N = normalize(cross(v1-v0,v2-v0));
+        double c = std::abs(dot(N,normalize((vec3d&)h_rays[i].direction)));
+        c = .2+c*.8;
+        pixel = (float)c*(.5f+.5f*randomColor(hit.primID));
+      }
+      m_pixels[i].x = pixel.x;
+      m_pixels[i].y = pixel.y;
+      m_pixels[i].z = pixel.z;
+      m_pixels[i].w = 1.f;
+    }
+  }
+  
 
   /*! generate ray for a given pixel/image plane coordinate. based on
       how the camera was created this could be either a orthogonal or
@@ -192,6 +223,7 @@ namespace miniapp {
 
   DPRTModel toDPRT(DPRTContext ctx,
                    mini::Scene::SP miniModel,
+                   std::vector<mini::Mesh::SP> &linearMeshes,
                    double shift)
   {
     assert(ctx);
@@ -200,7 +232,7 @@ namespace miniapp {
 
     std::vector<DPRTGroup> instanceGroups;
     std::vector<mini::common::affine3d> instanceTransforms;
-    uint64_t uniqueMeshIDs = 0;
+    // uint64_t uniqueMeshIDs = 0;
 
     bool hasInstances = false;
     for (auto inst : miniModel->instances) {
@@ -214,19 +246,21 @@ namespace miniapp {
       if (!dprtGroupFor[inst->object]) {
         std::vector<DPRTTriangles> meshes;
         for (auto miniMesh : inst->object->meshes) {
-          auto vertices = miniMesh->vertices;
+          auto &vertices = miniMesh->vertices;
           if (!hasInstances)
             for (auto &v : vertices)
               v += shift * vec3d(1.,.1,.01);
+          uint64_t uniqueMeshID  = linearMeshes.size();
           DPRTTriangles dt
             = dprtCreateTriangles(ctx,
-                                  uniqueMeshIDs++,
-                                  (DPRTvec3*)vertices.data(),
-                                  vertices.size(),
+                                  uniqueMeshID,
+                                  (DPRTvec3*)miniMesh->vertices.data(),
+                                  miniMesh->vertices.size(),
                                   (DPRTint3*)miniMesh->indices.data(),
                                   miniMesh->indices.size());
           assert(dt);
           meshes.push_back(dt);
+          linearMeshes.push_back(miniMesh);
         }
         DPRTGroup group
           = dprtCreateTrianglesGroup(ctx,
@@ -339,6 +373,35 @@ namespace miniapp {
     std::cout << "  --output-res x y # res of test-frame image" << std::endl;
     exit(0);
   }
+
+    void savePPM(std::string outImageName,
+                 vec2i fbSize,
+                 vec4f *m_pixels)
+    {
+    std::cout << "#dpm: writing test image to " << outImageName << std::endl;
+    std::ofstream out(outImageName.c_str());
+    char buf[100];
+    sprintf(buf,"P3\n#deepee test image\n%i %i 255\n",fbSize.x,fbSize.y);
+    out << "P3\n";
+    out << "#deepeeRT test image\n";
+    out << fbSize.x << " " << fbSize.y << " 255" << std::endl;
+    for (int iy=0;iy<fbSize.y;iy++) {
+      for (int ix=0;ix<fbSize.x;ix++) {
+        vec4f pixel = m_pixels[ix+(fbSize.y-1-iy)*fbSize.x];
+        auto write = [&](float f) {
+          f = f*256.f;
+          f = std::min(f,255.f);
+          f = std::max(f,0.f);
+          out << int(f) << " ";
+        };
+        write(pixel.x);
+        write(pixel.y);
+        write(pixel.z);
+        out << " ";
+      }
+      out << "\n";
+    }
+    }
   
   void main(int ac, char **av)
   {
@@ -420,8 +483,10 @@ namespace miniapp {
       modelShift = 0.;
     else
       modelShift = shift;
-        
-    DPRTModel model = toDPRT(dprt,scene,modelShift);
+
+    std::vector<mini::Mesh::SP> linearMeshes;
+    DPRTModel model = toDPRT(dprt,scene,linearMeshes,
+                             modelShift);
 
     CUDA_SYNC_CHECK();
     size_t nRays = fbSize.x*fbSize.y;
@@ -462,36 +527,21 @@ namespace miniapp {
     std::vector<DPRTHit> h_hits(nHits);
     cudaMemcpy(h_hits.data(),d_hits,nHits*sizeof(DPRTHit),cudaMemcpyDefault);
     CUDA_SYNC_CHECK();
-    std::ofstream f_hits(outHitsName.c_str(),std::ios::binary);
-    f_hits.write((char*)&nHits,sizeof(nHits));
-    PRINT(nHits);
-    f_hits.write((char*)h_hits.data(),nHits*sizeof(DPRTHit));
-    
-
-    std::cout << "#dpm: writing test image to " << outImageName << std::endl;
-    std::ofstream out(outImageName.c_str());
-
-    char buf[100];
-    sprintf(buf,"P3\n#deepee test image\n%i %i 255\n",fbSize.x,fbSize.y);
-    out << "P3\n";
-    out << "#deepeeRT test image\n";
-    out << fbSize.x << " " << fbSize.y << " 255" << std::endl;
-    for (int iy=0;iy<fbSize.y;iy++) {
-      for (int ix=0;ix<fbSize.x;ix++) {
-        vec4f pixel = m_pixels[ix+(fbSize.y-1-iy)*fbSize.x];
-        auto write = [&](float f) {
-          f = f*256.f;
-          f = std::min(f,255.f);
-          f = std::max(f,0.f);
-          out << int(f) << " ";
-        };
-        write(pixel.x);
-        write(pixel.y);
-        write(pixel.z);
-        out << " ";
-      }
-      out << "\n";
+    if (outHitsName != "") {
+      std::ofstream f_hits(outHitsName.c_str(),std::ios::binary);
+      f_hits.write((char*)&nHits,sizeof(nHits));
+      PRINT(nHits);
+      f_hits.write((char*)h_hits.data(),nHits*sizeof(DPRTHit));
     }
+
+    savePPM(outImageName,fbSize,m_pixels);
+
+
+    shadePretty(m_pixels,fbSize,
+                  h_rays.data(),h_hits.data(),
+                  scene,linearMeshes);
+    savePPM(outImageName+"_pretty.ppm",fbSize,m_pixels);
+    
   }
 }
 
