@@ -221,7 +221,7 @@ int main(int ac, char **av)
             << prettyDouble(timeForTheseIts) << "s, that's "
             << prettyDouble(numAllRays/timeForTheseIts) << "rays/s"
             << std::endl;
-  std::cout << << "PERF_RPS " << prettyDouble(numAllRays/timeForTheseIts) << std::endl;
+  std::cout << "PERF_RPS " << prettyDouble(numAllRays/timeForTheseIts) << std::endl;
   return 0;
 }
 
