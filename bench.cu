@@ -162,7 +162,7 @@ int main(int ac, char **av)
   std::string inRaysName = "";
   std::string inHitsName = "";
   std::string outHitsName = "";
-  double numSecsForMeasure = 10.;
+  double numSecsForMeasure = 4.;
 
   for (int i=1;i<ac;i++) {
     const std::string arg = av[i];
@@ -221,6 +221,7 @@ int main(int ac, char **av)
             << prettyDouble(timeForTheseIts) << "s, that's "
             << prettyDouble(numAllRays/timeForTheseIts) << "rays/s"
             << std::endl;
+  std::cout << << "PERF_RPS " << prettyDouble(numAllRays/timeForTheseIts) << std::endl;
   return 0;
 }
 
