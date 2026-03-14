@@ -1,6 +1,7 @@
 #include "dprt/dprt.h"
 #include "miniScene/Scene.h"
 #include <fstream>
+#include <thread>
 
 using mini::common::prettyNumber;
 using mini::common::prettyDouble;
@@ -36,6 +37,47 @@ T *alloc(size_t N)
 //   int nb = divRoundUp(N,bs);
 //   g_clearHits<<<nb,bs>>>(d_hits,N);
 // }
+
+namespace watchDog {
+ int timeToTrigger = 60;
+ bool shutdown = false;
+ bool running = false;
+ std::thread thread;
+  
+ void start() {
+    running = true;
+    shutdown = false;
+    thread = std::thread([]() {
+      int numSecsWaited = 0;
+      while (true) {
+        if (shutdown) return;
+        sleep(1);
+        if (shutdown) return;
+        if (++numSecsWaited >= timeToTrigger) {
+          std::cout << "WATCHDOG TRIGGERED!" << std::endl;
+          _exit(0);
+        }
+      }
+    });
+  }
+ void end()
+  {
+    shutdown = true;
+    thread.join();
+    running = false;
+  }
+}
+
+  void usage(const std::string &error)
+  {
+    if (error != "") std::cout << "Error : " << error << "\n\n";
+    std::cout << "./dpBench <flags>" << std::endl;
+    std::cout << "/w flags:" << std::endl;
+    std::cout << "  -irf inRaysFile.dprays" << std::endl;
+    std::cout << "  -imf inModelsFile.dpmini" << std::endl;
+    std::cout << "  --watchDog watchDogTimeInSeconds" << std::endl;
+    exit(0);
+  }
 
 
 std::vector<std::vector<DPRTRay>> loadRays(const std::string &fileName)
@@ -101,13 +143,17 @@ DPRTModel toDPRT(DPRTContext ctx,
   return dprtModel;
 }
 
+
+
 void trace(DPRTModel dpModel,
            std::vector<DPRTRay *> &devRayFronts,
            std::vector<DPRTHit *> &devHitFronts,
            std::vector<int>      &devRayCounts)
 {
-  for (int i=0;i<devRayFronts.size();i++)
+  watchDog::start();
+  for (int i=0;i<devRayFronts.size();i++) 
     dprtTrace(dpModel,devRayFronts[i],devHitFronts[i],devRayCounts[i]);
+  watchDog::end();
 }
 
 int main(int ac, char **av)
@@ -126,9 +172,15 @@ int main(int ac, char **av)
       inModelName = av[++i];
     else if (arg == "-irf")
       inRaysName = av[++i];
+    else if (arg == "--watchDog")
+      watchDog::timeToTrigger = std::stoi(av[++i]);
     else
       throw std::runtime_error("unknown cmdline arg '"+arg+"'");
   }
+  if (inModelName.empty())
+    usage("no in model name (-imf) specified");
+  if (inRaysName.empty())
+    usage("no in rays-file name (-irf) specified");
 
   mini::Scene::SP miniModel = mini::Scene::load(inModelName);
   DPRTContext ctx = dprtContextCreate(DPRT_CONTEXT_GPU,0);

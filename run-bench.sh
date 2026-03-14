@@ -35,6 +35,7 @@ for config in $configs; do
 		`cat $benchData/$model.dpmini.view` \
 		--native-scale `cat $benchData/$model.dpmini.ortho` \
 		--shift $ms \
+		-omf experiments/$config/$model-ortho$os.dpmini \
 		-orf experiments/$config/$model-persp$ms.dprays \
 		-ohf experiments/$config/$model-persp$ms.dphits \
 		-oif experiments/$config/$model-persp$ms.ppm"
@@ -49,6 +50,7 @@ for config in $configs; do
 		--native-scale `cat $benchData/$model.dpmini.ortho` \
 		--shift $os \
 		--ortho \
+		-omf experiments/$config/$model-ortho$os.dpmini \
 		-orf experiments/$config/$model-ortho$os.dprays \
 		-ohf experiments/$config/$model-ortho$os.dphits \
 		-oif experiments/$config/$model-ortho$os.ppm"

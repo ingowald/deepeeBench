@@ -370,6 +370,7 @@ namespace miniapp {
     std::cout << "/w flags:" << std::endl;
     std::cout << "  -orf outRayFile.dprays" << std::endl;
     std::cout << "  -ohf outHitFile.dphits" << std::endl;
+    std::cout << "  -omf outModelFile.dpmini" << std::endl;
     std::cout << "  --ortho orthoPlaneHeight" << std::endl;
     std::cout << "  --watchDog watchDogTimeInSeconds" << std::endl;
     std::cout << "  -bc # render test-frame w/ backface culling" << std::endl;
@@ -437,6 +438,7 @@ namespace miniapp {
     std::string outImageName = "makePrimaryRays.ppm";
     std::string outRaysName = "makePrimaryRays.dprays";
     std::string outHitsName = "makePrimaryHits.dphits";
+    std::string outModelName = "";
     vec2i fbSize = { 1600,1200 };//{ 1024,1024 };
     uint64_t flags = 0;
     for (int i=1;i<ac;i++) {
@@ -451,6 +453,8 @@ namespace miniapp {
         flags |= DPRT_CULL_FRONT;
       } else if (arg == "-orf" || arg == "--out-rays-file") {
         outRaysName = av[++i];
+      } else if (arg == "-omf" || arg == "--out-model-file") {
+        outModelName = av[++i];
       } else if (arg == "-ohf" || arg == "--out-hits-file") {
         outHitsName = av[++i];
       } else if (arg == "--native-scale") {
@@ -522,6 +526,9 @@ namespace miniapp {
     DPRTModel model = toDPRT(dprt,scene,linearMeshes,
                              modelShift);
 
+    if (outModelName != "")
+      scene->save(outModelName);
+    
     CUDA_SYNC_CHECK();
     size_t nRays = fbSize.x*fbSize.y;
     DPRTRay *d_rays = 0;
