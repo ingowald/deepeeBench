@@ -5,7 +5,7 @@
 #include "dprt/dprt.h"
 #include "miniScene/Scene.h"
 #include <fstream>
-
+#include <thread>
 
 #if FORCE_BUG
 # define dbg_x 965 // miss
@@ -32,6 +32,7 @@ extern int dprt_dbg_rayID;
 namespace miniapp {
   using namespace mini;
 
+  int watchDogTime = 0;
   double shift = 0.;
   
   struct {
@@ -39,7 +40,8 @@ namespace miniapp {
     vec3d at = 0.;
     vec3d up { 0.,1.,0.};
     double fovy = 0.;
-    double ortho = 0.;
+    double native_scale = 0.;
+    bool do_ortho = false;
   } view;
   
   /*! this HAS to be the same data layout as DPRRay in deepee.h */
@@ -69,10 +71,10 @@ namespace miniapp {
     vec3d dir = view.at - center;
     vec3d du = normalize(cross(dir,view.up));
     vec3d dv = normalize(cross(du,dir));
-    camera.origin.dv = dv*view.ortho/imageRes.y;
-    camera.origin.du = du*view.ortho/imageRes.y;
+    camera.origin.dv = dv*view.native_scale/imageRes.y;
+    camera.origin.du = du*view.native_scale/imageRes.y;
     camera.origin.v  = view.from
-      - (shift * view.ortho) * normalize(dir)
+      - (shift * view.native_scale) * normalize(dir)
       - .5 *imageRes.x * camera.origin.du
       - .5 *imageRes.y * camera.origin.dv;
     camera.direction.v = dir;
@@ -118,7 +120,7 @@ namespace miniapp {
     camera.origin.v = from;
     camera.origin.du = 0.;
     camera.origin.dv = 0.;
-    camera.origin.v += shift * vec3d(1.,.1,.01);
+    camera.origin.v += (view.native_scale*shift) * vec3d(1.,.1,.01);
 
     PRINT(camera.origin.v);
     
@@ -249,7 +251,7 @@ namespace miniapp {
           auto &vertices = miniMesh->vertices;
           if (!hasInstances)
             for (auto &v : vertices)
-              v += shift * vec3d(1.,.1,.01);
+              v += (shift*view.native_scale) * vec3d(1.,.1,.01);
           uint64_t uniqueMeshID  = linearMeshes.size();
           DPRTTriangles dt
             = dprtCreateTriangles(ctx,
@@ -272,7 +274,7 @@ namespace miniapp {
       instanceGroups.push_back(dprtGroupFor[inst->object]);
       auto xfm = inst->xfm;
       if (hasInstances)
-        xfm.p += shift * vec3d(1.,.1,.01);
+        xfm.p += (shift*view.native_scale) * vec3d(1.,.1,.01);
       instanceTransforms.push_back(xfm);
     }
     // for (auto xfm : instanceTransforms)
@@ -367,6 +369,7 @@ namespace miniapp {
     std::cout << "  -orf outRayFile.dprays" << std::endl;
     std::cout << "  -ohf outHitFile.dphits" << std::endl;
     std::cout << "  --ortho orthoPlaneHeight" << std::endl;
+    std::cout << "  --watchDog watchDogTimeInSeconds" << std::endl;
     std::cout << "  -bc # render test-frame w/ backface culling" << std::endl;
     std::cout << "  -fc # render test-frame w/ frontface culling" << std::endl;
     std::cout << "  -oif testFrame.ppm  # where to dump test-frame to" << std::endl;
@@ -402,6 +405,18 @@ namespace miniapp {
       out << "\n";
     }
     }
+
+  void watchDog()
+  {
+    if (watchDogTime == 0) return;
+
+    static std::thread wdThread;
+    wdThread = std::thread([](){
+      sleep(watchDogTime);
+      std::cout << "WATCHDOG EXPIRED!!!!" << std::endl;
+      _exit(0);
+    });
+  }
   
   void main(int ac, char **av)
   {
@@ -417,12 +432,16 @@ namespace miniapp {
         inFileName = arg;
       } else if (arg == "-bc" || arg == "--backface-culling") {
         flags |= DPRT_CULL_BACK;
+      } else if (arg == "--watchDog") {
+        watchDogTime = std::stoi(av[++i]);
       } else if (arg == "-fc" || arg == "--frontface-culling") {
         flags |= DPRT_CULL_FRONT;
       } else if (arg == "-orf" || arg == "--out-rays-file") {
         outRaysName = av[++i];
       } else if (arg == "-ohf" || arg == "--out-hits-file") {
         outHitsName = av[++i];
+      } else if (arg == "--native-scale") {
+        view.native_scale = std::stod(av[++i]);
       } else if (arg == "--shift") {
         shift = std::stod(av[++i]);
         if (shift != 0.)
@@ -445,18 +464,20 @@ namespace miniapp {
         fbSize.x = std::stoi(av[++i]);
         fbSize.y = std::stoi(av[++i]);
       } else if (arg == "--ortho") {
-        view.ortho = std::stof(av[++i]);
+        view.do_ortho = true;
       } else
         usage("un-recognized cmdline arg '"+arg+"'");
     }
     if (inFileName.empty())
       usage("no input file name specified");
-
+    if (view.native_scale == 0.)
+      usage("no --native-scale specified");
+      
     mini::Scene::SP scene = mini::Scene::load(inFileName);
 
     box3d bounds = scene->getBounds();
     PRINT(bounds);
-    double scale = length(bounds.size());
+    // double scale = length(bounds.size());
     Camera camera;
     if (view.fovy == 0.) {
       view.at = bounds.center();
@@ -467,7 +488,7 @@ namespace miniapp {
     PRINT(view.at);
     PRINT(shift);
     
-    if (view.ortho != 0.)
+    if (view.do_ortho)
       camera = generateOrtho(fbSize,length(bounds.size())+shift);
     else
       camera = generateCamera(fbSize,shift);
@@ -479,7 +500,7 @@ namespace miniapp {
     DPRTContext dprt = dprtContextCreate(DPRT_CONTEXT_GPU,0);
     std::cout << "#dpm: creating model" << std::endl;
     double modelShift = 0.f;
-    if (view.ortho != 0.)
+    if (view.do_ortho)
       modelShift = 0.;
     else
       modelShift = shift;
@@ -513,6 +534,8 @@ namespace miniapp {
     DPRTHit *d_hits = 0;
     cudaMalloc((void **)&d_hits,fbSize.x*fbSize.y*sizeof(DPRTHit));
 
+    watchDog();
+    
     CUDA_SYNC_CHECK();
     std::cout << "#dpm: calling trace" << std::endl;
     dprtTrace(model,d_rays,d_hits,fbSize.x*fbSize.y,flags);

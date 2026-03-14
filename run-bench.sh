@@ -6,7 +6,7 @@ models="bmw ls pp rungholt truck donotshare-e89-open donotshare-e89-closed donot
 
 configs="cuBQL-float cuBQL-double owl-rtx owl-double-distance owl-double-triTest"
 #shifts="0 100 10000 "
-shifts="00 02 04 06 08 10 12"
+shifts="00 01 02 03 04 05 06 08 10"
 #mkdir experiments/build_cuBQL_double
 #cmake -S . -B experiments/build_cuBQL_double
 #cmake --build experiments/build_cuBQL_double
@@ -17,6 +17,7 @@ shifts="00 02 04 06 08 10 12"
 
 #cmake --con
 mkdir experiments
+for model in $models; do
 for config in $configs; do
     echo "======================================================="
     echo config $config
@@ -27,11 +28,12 @@ for config in $configs; do
     mkdir experiments/$config
     CMAKE_PREFIX_PATH=/home/wald/opt/ cmake -S . -B experiments/$config ${flags}
     cmake --build experiments/$config --parallel 32
-    for model in $models; do
 	for ms in $shifts; do
 	    cmd="experiments/$config/dpMakePrimaryRays\
 		$benchData/$model.dpmini\
+                --watchDog 60\
 		`cat $benchData/$model.dpmini.view` \
+		--native-scale `cat $benchData/$model.dpmini.ortho` \
 		--shift $ms \
 		-orf experiments/$config/$model-persp$ms.dprays \
 		-ohf experiments/$config/$model-persp$ms.dphits \
@@ -43,8 +45,10 @@ for config in $configs; do
 	    cmd="experiments/$config/dpMakePrimaryRays\
 		$benchData/$model.dpmini\
 		`cat $benchData/$model.dpmini.view` \
-		--ortho `cat $benchData/$model.dpmini.ortho` \
+                --watchDog 60\
+		--native-scale `cat $benchData/$model.dpmini.ortho` \
 		--shift $os \
+		--ortho \
 		-orf experiments/$config/$model-ortho$os.dprays \
 		-ohf experiments/$config/$model-ortho$os.dphits \
 		-oif experiments/$config/$model-ortho$os.ppm"
