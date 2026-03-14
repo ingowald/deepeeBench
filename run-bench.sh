@@ -35,12 +35,18 @@ for config in $configs; do
 		`cat $benchData/$model.dpmini.view` \
 		--native-scale `cat $benchData/$model.dpmini.ortho` \
 		--shift $ms \
-		-omf experiments/$config/$model-ortho$os.dpmini \
+		-omf experiments/$config/$model-persp$os.dpmini \
 		-orf experiments/$config/$model-persp$ms.dprays \
 		-ohf experiments/$config/$model-persp$ms.dphits \
 		-oif experiments/$config/$model-persp$ms.ppm"
 	    echo cmd is: $cmd
 	    $cmd
+	    
+	    cmd="experiments/$config/dpBench\
+		-imf experiments/$config/$model-persp$os.dpmini \
+		-irf experiments/$config/$model-persp$ms.dprays "
+	    echo cmd is: $cmd
+	    $cmd | tee experiments/$config/$model-ortho$os.out
 	done
 	for os in $shifts; do
 	    cmd="experiments/$config/dpMakePrimaryRays\
@@ -56,6 +62,11 @@ for config in $configs; do
 		-oif experiments/$config/$model-ortho$os.ppm"
 	    echo cmd is: $cmd
 	    $cmd
+	    cmd="experiments/$config/dpBench\
+		-imf experiments/$config/$model-ortho$os.dpmini \
+		-irf experiments/$config/$model-ortho$ms.dprays "
+	    echo cmd is: $cmd
+	    $cmd | tee experiments/$config/$model-ortho$os.out
 	done
     done
 done
