@@ -30,6 +30,8 @@
 extern int dprt_dbg_rayID;
 
 namespace miniapp {
+  std::thread wdThread;
+  bool wdTerminate = false;
   using namespace mini;
 
   int watchDogTime = 0;
@@ -160,8 +162,8 @@ namespace miniapp {
   
 
   /*! generate ray for a given pixel/image plane coordinate. based on
-      how the camera was created this could be either a orthogonal or
-      a perspective camera (see Camera.cpp) */
+    how the camera was created this could be either a orthogonal or
+    a perspective camera (see Camera.cpp) */
   inline __device__
   Ray Camera::generateRay(vec2d pixel, double shift, bool dbg) const
   {
@@ -334,17 +336,17 @@ namespace miniapp {
     vec2d pixel = {u,v};
     Ray ray = camera.generateRay(pixel,dbg);
 
-// #if FORCE_BUG
-//     int dbg_x = 980; // miss
-// #else
-//     int dbg_x = 990; // hit
-// #endif
-//     int dbg_y = 500;
+    // #if FORCE_BUG
+    //     int dbg_x = 980; // miss
+    // #else
+    //     int dbg_x = 990; // hit
+    // #endif
+    //     int dbg_y = 500;
 
-//     // if (ix == dbg_x || iy == dbg_y)
-//     //   ray.tMax = 0.;
-//     if (!(ix == dbg_x && iy == dbg_y))
-//       ray.tMax = 0.;
+    //     // if (ix == dbg_x || iy == dbg_y)
+    //     //   ray.tMax = 0.;
+    //     if (!(ix == dbg_x && iy == dbg_y))
+    //       ray.tMax = 0.;
     
     int rayID = ix+iy*fbSize.x;
     int dbg_rayID = dbg_x + dbg_y*fbSize.x;
@@ -377,10 +379,10 @@ namespace miniapp {
     exit(0);
   }
 
-    void savePPM(std::string outImageName,
-                 vec2i fbSize,
-                 vec4f *m_pixels)
-    {
+  void savePPM(std::string outImageName,
+               vec2i fbSize,
+               vec4f *m_pixels)
+  {
     std::cout << "#dpm: writing test image to " << outImageName << std::endl;
     std::ofstream out(outImageName.c_str());
     char buf[100];
@@ -404,17 +406,28 @@ namespace miniapp {
       }
       out << "\n";
     }
-    }
+  }
 
   void watchDog()
   {
+    PING; PRINT(watchDogTime);
     if (watchDogTime == 0) return;
 
-    static std::thread wdThread;
+    PING;
     wdThread = std::thread([](){
-      sleep(watchDogTime);
-      std::cout << "WATCHDOG EXPIRED!!!!" << std::endl;
-      _exit(0);
+      PING;
+      int timeSlept = 0;
+      while (miniapp::watchDogTime > 0) {
+        if (wdTerminate) return;
+        
+        sleep(1);
+        if (wdTerminate) return;
+        
+        if (++timeSlept > watchDogTime) {
+          std::cout << "WATCHDOG EXPIRED!!!!" << std::endl;
+          _exit(0);
+        }
+      }
     });
   }
   
@@ -561,8 +574,8 @@ namespace miniapp {
 
 
     shadePretty(m_pixels,fbSize,
-                  h_rays.data(),h_hits.data(),
-                  scene,linearMeshes);
+                h_rays.data(),h_hits.data(),
+                scene,linearMeshes);
     savePPM(outImageName+"_pretty.ppm",fbSize,m_pixels);
     
   }
@@ -571,5 +584,9 @@ namespace miniapp {
 int main(int ac, char **av)
 {
   miniapp::main(ac,av);
+  if (miniapp::watchDogTime > 0) {
+    miniapp::wdTerminate = true;
+    miniapp::wdThread.join();
+  }
   return 0;
 }
