@@ -1,12 +1,14 @@
 #!/bin/bash
 
 benchData=/home/wald/deepeeData
-models="bmw ls pp rungholt truck donotshare-e89-open donotshare-e89-closed donotshare-headlight donotshare-tokamak"
+models="bmw pp rungholt truck donotshare-e89-open donotshare-e89-closed donotshare-headlight donotshare-tokamak ls"
+#models="bmw ls pp rungholt truck donotshare-e89-open donotshare-e89-closed donotshare-headlight donotshare-tokamak"
 #models="truck"
 
 configs="cuBQL-float cuBQL-double owl-rtx owl-double-distance owl-double-triTest"
 #shifts="0 100 10000 "
-shifts="00 01 02 03 04 05 06 08 10"
+shifts="00 01 02 03 04 05 06 08"
+#shifts="00 01 02 03 04 05 06 08 10"
 #mkdir experiments/build_cuBQL_double
 #cmake -S . -B experiments/build_cuBQL_double
 #cmake --build experiments/build_cuBQL_double
@@ -35,7 +37,7 @@ for config in $configs; do
 		`cat $benchData/$model.dpmini.view` \
 		--native-scale `cat $benchData/$model.dpmini.ortho` \
 		--shift $ms \
-		-omf experiments/$config/$model-persp$os.dpmini \
+		-omf experiments/$config/$model-persp$ms.dpmini \
 		-orf experiments/$config/$model-persp$ms.dprays \
 		-ohf experiments/$config/$model-persp$ms.dphits \
 		-oif experiments/$config/$model-persp$ms.ppm"
@@ -43,10 +45,10 @@ for config in $configs; do
 	    $cmd
 	    
 	    cmd="experiments/$config/dpBench\
-		-imf experiments/$config/$model-persp$os.dpmini \
+		-imf experiments/$config/$model-persp$ms.dpmini \
 		-irf experiments/$config/$model-persp$ms.dprays "
 	    echo cmd is: $cmd
-	    $cmd | tee experiments/$config/$model-ortho$os.out
+	    $cmd | tee experiments/$config/$model-ortho$ms.out
 	done
 	for os in $shifts; do
 	    cmd="experiments/$config/dpMakePrimaryRays\
@@ -64,7 +66,7 @@ for config in $configs; do
 	    $cmd
 	    cmd="experiments/$config/dpBench\
 		-imf experiments/$config/$model-ortho$os.dpmini \
-		-irf experiments/$config/$model-ortho$ms.dprays "
+		-irf experiments/$config/$model-ortho$os.dprays "
 	    echo cmd is: $cmd
 	    $cmd | tee experiments/$config/$model-ortho$os.out
 	done
