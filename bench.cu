@@ -88,11 +88,9 @@ std::vector<std::vector<DPRTRay>> loadRays(const std::string &fileName)
     throw std::runtime_error("could not open rays file!?");
   std::vector<std::vector<DPRTRay>> ret;
   while (in.good() && !in.eof()) {
-    PING;
     size_t numRays = 0;
     in.read((char *)&numRays,sizeof(numRays));
     if (!in.good()) break;
-    PRINT(numRays);
     assert(numRays != 0);
     ret.push_back({});
     ret.back().resize(numRays);
@@ -150,10 +148,8 @@ void trace(DPRTModel dpModel,
            std::vector<DPRTHit *> &devHitFronts,
            std::vector<int>      &devRayCounts)
 {
-  watchDog::start();
   for (int i=0;i<devRayFronts.size();i++) 
     dprtTrace(dpModel,devRayFronts[i],devHitFronts[i],devRayCounts[i]);
-  watchDog::end();
 }
 
 int main(int ac, char **av)
@@ -198,6 +194,7 @@ int main(int ac, char **av)
     devRayCounts.push_back(wave.size());
   }
 
+  watchDog::start();
   // first round for warmup
   trace(dpModel,devRayFronts,devHitFronts,devRayCounts);
 
@@ -222,6 +219,7 @@ int main(int ac, char **av)
             << prettyDouble(numAllRays/timeForTheseIts) << "rays/s"
             << std::endl;
   std::cout << "PERF_RPS " << prettyDouble(numAllRays/timeForTheseIts) << std::endl;
+  watchDog::end();
   return 0;
 }
 

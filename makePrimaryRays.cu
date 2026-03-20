@@ -411,12 +411,9 @@ namespace miniapp {
 
   void watchDog()
   {
-    PING; PRINT(watchDogTime);
     if (watchDogTime == 0) return;
 
-    PING;
     wdThread = std::thread([](){
-      PING;
       int timeSlept = 0;
       while (miniapp::watchDogTime > 0) {
         if (wdTerminate) return;
