@@ -66,17 +66,20 @@ namespace miniapp {
     } origin, direction;
   };
 
-  Camera generateOrtho(vec2i imageRes, double shift)
+  Camera generateOrtho(vec2i imageRes, double modelDiagSize, double shift)
   {
+    PING;
     Camera camera;
     vec3d center = view.from;
+    PRINT(center);
     vec3d dir = view.at - center;
     vec3d du = normalize(cross(dir,view.up));
     vec3d dv = normalize(cross(du,dir));
     camera.origin.dv = dv*view.native_scale/imageRes.y;
     camera.origin.du = du*view.native_scale/imageRes.y;
+    PRINT(shift*view.native_scale);
     camera.origin.v  = view.from
-      - (shift * view.native_scale) * normalize(dir)
+      - (modelDiagSize + shift * view.native_scale) * normalize(dir)
       - .5 *imageRes.x * camera.origin.du
       - .5 *imageRes.y * camera.origin.dv;
     camera.direction.v = dir;
@@ -86,11 +89,12 @@ namespace miniapp {
   }
   
   Camera generateCamera(vec2i imageRes,
-                        // const box3d &bounds,
+                        // const box3d &bounds, 
                         // const vec3d &from_dir,
                         // const vec3d &up,
                         double shift)
   {
+    PING;
     Camera camera;
     vec3d target = view.at;//bounds.center();
     vec3d from = view.from;//target + from_dir;
@@ -371,7 +375,9 @@ namespace miniapp {
     std::cout << "  -orf outRayFile.dprays" << std::endl;
     std::cout << "  -ohf outHitFile.dphits" << std::endl;
     std::cout << "  -omf outModelFile.dpmini" << std::endl;
-    std::cout << "  --ortho orthoPlaneHeight" << std::endl;
+    std::cout << "  --ortho" << std::endl;
+    std::cout << "  --native-scale nativeScaleValue" << std::endl;
+    std::cout << "  --shift logShiftValue" << std::endl;
     std::cout << "  --watchDog watchDogTimeInSeconds" << std::endl;
     std::cout << "  -bc # render test-frame w/ backface culling" << std::endl;
     std::cout << "  -fc # render test-frame w/ frontface culling" << std::endl;
@@ -503,7 +509,7 @@ namespace miniapp {
     PRINT(shift);
     
     if (view.do_ortho)
-      camera = generateOrtho(fbSize,length(bounds.size())+shift);
+      camera = generateOrtho(fbSize,length(bounds.size()),shift);
     else
       camera = generateCamera(fbSize,shift);
     
