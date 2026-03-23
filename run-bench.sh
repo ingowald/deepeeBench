@@ -2,18 +2,19 @@
 
 benchData=/home/wald/deepeeData
 models="bmw pp rungholt truck donotshare-e89-open donotshare-e89-closed donotshare-headlight donotshare-tokamak ls"
-#models="bmw ls pp rungholt truck donotshare-e89-open donotshare-e89-closed donotshare-headlight donotshare-tokamak"
-models="truck"
+models="ls bmw pp rungholt truck donotshare-e89-open donotshare-e89-closed donotshare-headlight donotshare-tokamak"
+#models="truck"
 
 configs="cuBQL-float cuBQL-double owl-rtx owl-double-distance owl-double-triTest"
 #shifts="0 100 10000 "
+#shifts="00 01 "
 shifts="00 01 02 03 04 05 06 08"
 #shifts="00 01 02 03 04 05 06 08 10"
-shifts="00"
+#shifts="00"
 #mkdir experiments/build_cuBQL_double
 #cmake -S . -B experiments/build_cuBQL_double
 #cmake --build experiments/build_cuBQL_double
-
+watchDog=2000
 
 #mkdir experiments/build_cuBQL_float
 #mkdir experiments/build_owl_
@@ -34,7 +35,7 @@ for config in $configs; do
 	for ms in $shifts; do
 	    cmd="experiments/$config/dpMakePrimaryRays\
 		$benchData/$model.dpmini\
-                --watchDog 120\
+                --watchDog $watchDog\
 		`cat $benchData/$model.dpmini.view` \
 		--native-scale `cat $benchData/$model.dpmini.ortho` \
 		--shift $ms \
@@ -43,19 +44,20 @@ for config in $configs; do
 		-ohf experiments/$config/$model-persp$ms.dphits \
 		-oif experiments/$config/$model-persp$ms.ppm"
 	    echo cmd is: $cmd
-	    $cmd
+	    $cmd 2>&1 | tee experiments/$config/makePrimary-$model-persp$ms.log
 	    
 	    cmd="experiments/$config/dpBench\
+                --watchDog $watchDog\
 		-imf experiments/$config/$model-persp$ms.dpmini \
 		-irf experiments/$config/$model-persp$ms.dprays "
 	    echo cmd is: $cmd
-	    $cmd | tee experiments/$config/$model-ortho$ms.log
+	    $cmd 2>&1 | tee experiments/$config/$model-persp$ms.log
 	done
 	for os in $shifts; do
 	    cmd="experiments/$config/dpMakePrimaryRays\
 		$benchData/$model.dpmini\
 		`cat $benchData/$model.dpmini.view` \
-                --watchDog 120\
+                --watchDog $watchDog\
 		--native-scale `cat $benchData/$model.dpmini.ortho` \
 		--shift $os \
 		--ortho \
@@ -64,12 +66,13 @@ for config in $configs; do
 		-ohf experiments/$config/$model-ortho$os.dphits \
 		-oif experiments/$config/$model-ortho$os.ppm"
 	    echo cmd is: $cmd
-	    $cmd
+	    $cmd 2>&1 | tee experiments/$config/makePrimary-$model-ortho$os.log
 	    cmd="experiments/$config/dpBench\
+                --watchDog $watchDog\
 		-imf experiments/$config/$model-ortho$os.dpmini \
 		-irf experiments/$config/$model-ortho$os.dprays "
 	    echo cmd is: $cmd
-	    $cmd | tee experiments/$config/$model-ortho$os.log
+	    $cmd 2>&1 | tee experiments/$config/$model-ortho$os.log
 	done
     done
 done
