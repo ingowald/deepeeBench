@@ -7,9 +7,10 @@ models="ls bmw pp rungholt truck donotshare-e89-open donotshare-e89-closed donot
 
 configs="cuBQL-float cuBQL-double owl-rtx owl-double-distance owl-double-triTest"
 #shifts="0 100 10000 "
-shifts="00 01 "
+#shifts="00 01 "
 shifts="00 "
-#shifts="00 01 02 03 04 05 06 08"
+shifts="00 01 02 03 04 05 06 08"
+shifts="00 01 02 04 "
 #shifts="00 01 02 03 04 05 06 08 10"
 #shifts="00"
 #mkdir experiments/build_cuBQL_double

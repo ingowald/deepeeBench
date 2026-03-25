@@ -586,7 +586,7 @@ namespace miniapp {
     shadePretty(m_pixels,fbSize,
                 h_rays.data(),h_hits.data(),
                 scene,linearMeshes);
-    savePPM(outImageName+"_pretty.ppm",fbSize,m_pixels);
+    savePPM(outImageName+"-pretty.ppm",fbSize,m_pixels);
     
   }
 }
