@@ -6,6 +6,9 @@
 #include "miniScene/Scene.h"
 #include <fstream>
 #include <thread>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb/stb_image.h"
+#include "stb/stb_image_write.h"
 
 #if FORCE_BUG
 # define dbg_x 965 // miss
@@ -133,7 +136,21 @@ namespace miniapp {
     return camera;
   }
 
-  void shadePretty(vec4f *m_pixels,
+    inline uint32_t make_8bit(const float f)
+  {
+    return min(255,max(0,int(f*256.f)));
+  }
+
+  inline uint32_t make_rgba(const vec3f color)
+  {
+    return
+      (make_8bit(color.x) << 0) +
+      (make_8bit(color.y) << 8) +
+      (make_8bit(color.z) << 16) +
+      (0xffU << 24);
+  }
+
+  void shadePretty(uint32_t *m_pixels,//vec4f *m_pixels,
                    vec2i fbSize,
                    DPRTRay *h_rays,
                    DPRTHit *h_hits,
@@ -157,10 +174,12 @@ namespace miniapp {
         c = .2+c*.8;
         pixel = (float)c*(.5f+.5f*randomColor(hit.primID));
       }
-      m_pixels[i].x = pixel.x;
-      m_pixels[i].y = pixel.y;
-      m_pixels[i].z = pixel.z;
-      m_pixels[i].w = 1.f;
+
+      m_pixels[i] = make_rgba(pixel);
+      // m_pixels[i].x = pixel.x;
+      // m_pixels[i].y = pixel.y;
+      // m_pixels[i].z = pixel.z;
+      // m_pixels[i].w = 1.f;
     }
   }
   
@@ -583,11 +602,16 @@ namespace miniapp {
     savePPM(outImageName,fbSize,m_pixels);
 
 
-    shadePretty(m_pixels,fbSize,
+    std::vector<uint32_t> m_rgba(fbSize.x*fbSize.y);
+    shadePretty(m_rgba.data(),fbSize,
                 h_rays.data(),h_hits.data(),
                 scene,linearMeshes);
-    savePPM(outImageName+"-pretty.ppm",fbSize,m_pixels);
-    
+
+    std::string outPrettyName
+      = outImageName.substr(0,outImageName.size()-4)
+      +"-pretty.jpg";
+    stbi_write_png(outPrettyName.c_str(),fbSize.x,fbSize.y,4,
+                   m_rgba.data(),fbSize.x*sizeof(uint32_t));
   }
 }
 
