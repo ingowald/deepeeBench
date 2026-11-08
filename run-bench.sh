@@ -12,7 +12,7 @@ shifts="00 "
 shifts="00 01 02 03 04 05 06 08"
 shifts="00 01 02 04 "
 #shifts="00 01 02 03 04 05 06 08 10"
-#shifts="00"
+shifts="00"
 #mkdir experiments/build_cuBQL_double
 #cmake -S . -B experiments/build_cuBQL_double
 #cmake --build experiments/build_cuBQL_double

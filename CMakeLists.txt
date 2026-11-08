@@ -5,6 +5,11 @@ cmake_minimum_required(VERSION 3.24)
 
 option(DPRT_OMP "Use OpenMP" OFF)
 
+set(CMAKE_BUILD_TYPE_INIT "Release")
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CUDA_STANDARD 20)
+
 project(dpBench LANGUAGES C CXX)
 
 if (NOT DPRT_OMP)
